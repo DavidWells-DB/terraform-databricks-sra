@@ -62,12 +62,6 @@ module "databricks_mws_workspace" {
   # Root Storage Bucket
   bucket_name = aws_s3_bucket.root_storage_bucket.id
 
-  # KMS Keys
-  managed_services_key        = aws_kms_key.managed_services.arn
-  workspace_storage_key       = aws_kms_key.workspace_storage.arn
-  managed_services_key_alias  = aws_kms_alias.managed_services_key_alias.name
-  workspace_storage_key_alias = aws_kms_alias.workspace_storage_key_alias.name
-
   # Network Connectivity Configuration and Network Policy
   network_connectivity_configuration_id = module.network_connectivity_configuration.ncc_id
   network_policy_id                     = module.network_policy.network_policy_id
@@ -131,7 +125,6 @@ module "unity_catalog_catalog_creation" {
   unity_catalog_iam_arn        = local.unity_catalog_iam_arn
   resource_prefix              = var.resource_prefix
   uc_catalog_name              = "${var.resource_prefix}-catalog-${module.databricks_mws_workspace.workspace_id}"
-  cmk_admin_arn                = var.cmk_admin_arn == null ? "arn:${local.computed_aws_partition}:iam::${var.aws_account_id}:root" : var.cmk_admin_arn
   workspace_id                 = module.databricks_mws_workspace.workspace_id
   user_workspace_catalog_admin = var.admin_user
 
