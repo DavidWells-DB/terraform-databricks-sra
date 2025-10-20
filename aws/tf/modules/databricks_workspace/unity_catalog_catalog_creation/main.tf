@@ -12,46 +12,46 @@ locals {
 }
 
 # Unity Catalog KMS
-resource "aws_kms_key" "catalog_storage" {
-  description = "KMS key for Databricks catalog storage ${var.workspace_id}"
-  policy = jsonencode({
-    Version : "2012-10-17",
-    "Id" : "key-policy-catalog-storage-${var.workspace_id}",
-    Statement : [
-      {
-        "Sid" : "Enable IAM User Permissions",
-        "Effect" : "Allow",
-        "Principal" : {
-          "AWS" : [var.cmk_admin_arn]
-        },
-        "Action" : "kms:*",
-        "Resource" : "*"
-      },
-      {
-        "Sid" : "Allow IAM Role to use the key",
-        "Effect" : "Allow",
-        "Principal" : {
-          "AWS" : "arn:${var.aws_iam_partition}:iam::${var.aws_account_id}:role/${local.uc_iam_role}"
-        },
-        "Action" : [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:GenerateDataKey*"
-        ],
-        "Resource" : "*"
-      }
-    ]
-  })
-  tags = {
-    Name    = "${var.resource_prefix}-catalog-storage-${var.workspace_id}-key"
-    Project = var.resource_prefix
-  }
-}
+# resource "aws_kms_key" "catalog_storage" {
+#   description = "KMS key for Databricks catalog storage ${var.workspace_id}"
+#   policy = jsonencode({
+#     Version : "2012-10-17",
+#     "Id" : "key-policy-catalog-storage-${var.workspace_id}",
+#     Statement : [
+#       {
+#         "Sid" : "Enable IAM User Permissions",
+#         "Effect" : "Allow",
+#         "Principal" : {
+#           "AWS" : [var.cmk_admin_arn]
+#         },
+#         "Action" : "kms:*",
+#         "Resource" : "*"
+#       },
+#       {
+#         "Sid" : "Allow IAM Role to use the key",
+#         "Effect" : "Allow",
+#         "Principal" : {
+#           "AWS" : "arn:${var.aws_iam_partition}:iam::${var.aws_account_id}:role/${local.uc_iam_role}"
+#         },
+#         "Action" : [
+#           "kms:Decrypt",
+#           "kms:Encrypt",
+#           "kms:GenerateDataKey*"
+#         ],
+#         "Resource" : "*"
+#       }
+#     ]
+#   })
+#   tags = {
+#     Name    = "${var.resource_prefix}-catalog-storage-${var.workspace_id}-key"
+#     Project = var.resource_prefix
+#   }
+# }
 
-resource "aws_kms_alias" "catalog_storage_key_alias" {
-  name          = "alias/${var.resource_prefix}-catalog-storage-${var.workspace_id}-key"
-  target_key_id = aws_kms_key.catalog_storage.id
-}
+# resource "aws_kms_alias" "catalog_storage_key_alias" {
+#   name          = "alias/${var.resource_prefix}-catalog-storage-${var.workspace_id}-key"
+#   target_key_id = aws_kms_key.catalog_storage.id
+# }
 
 # Storage Credential (created before role): https://registry.terraform.io/providers/databricks/databricks/latest/docs/guides/unity-catalog#configure-external-locations-and-credentials
 resource "databricks_storage_credential" "workspace_catalog_storage_credential" {
@@ -77,7 +77,7 @@ data "databricks_aws_unity_catalog_policy" "unity_catalog" {
   aws_partition  = var.aws_assume_partition
   bucket_name    = var.uc_catalog_name
   role_name      = local.uc_iam_role
-  kms_name       = aws_kms_alias.catalog_storage_key_alias.arn
+  # kms_name       = aws_kms_alias.catalog_storage_key_alias.arn
 }
 
 # Unity Catalog Policy
@@ -123,13 +123,11 @@ resource "aws_s3_bucket_versioning" "unity_catalog_versioning" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "unity_catalog" {
   bucket = aws_s3_bucket.unity_catalog_bucket.bucket
   rule {
-    bucket_key_enabled = true
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.catalog_storage.arn
+      sse_algorithm = "AES256"
     }
   }
-  depends_on = [aws_kms_alias.catalog_storage_key_alias]
+ # depends_on = [aws_kms_alias.catalog_storage_key_alias]
 }
 
 resource "aws_s3_bucket_public_access_block" "unity_catalog" {

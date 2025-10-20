@@ -21,10 +21,10 @@ variable "unity_catalog_iam_arn" {
   default     = "arn:aws:iam::414351767826:role/unity-catalog-prod-UCMasterRole-14S5ZJVKOTYTL"
 }
 
-variable "cmk_admin_arn" {
-  description = "Amazon Resource Name (ARN) of the CMK admin."
-  type        = string
-}
+# variable "cmk_admin_arn" {
+#   description = "Amazon Resource Name (ARN) of the CMK admin."
+#   type        = string
+# }
 
 variable "resource_prefix" {
   description = "Prefix for the resource names."

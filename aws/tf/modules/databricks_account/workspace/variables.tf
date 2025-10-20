@@ -30,15 +30,15 @@ variable "deployment_name" {
   nullable    = true
 }
 
-variable "managed_services_key" {
-  description = "CMK for managed services."
-  type        = string
-}
+# variable "managed_services_key" {
+#   description = "CMK for managed services."
+#   type        = string
+# }
 
-variable "managed_services_key_alias" {
-  description = "CMK for managed services alias."
-  type        = string
-}
+# variable "managed_services_key_alias" {
+#   description = "CMK for managed services alias."
+#   type        = string
+# }
 
 variable "network_policy_id" {
   description = "Network policy ID for serverless compute."
@@ -75,12 +75,13 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "workspace_storage_key" {
-  description = "CMK for workspace storage."
-  type        = string
-}
+# variable "workspace_storage_key" {
+#   description = "CMK for workspace storage."
+#   type        = string
+# }
 
-variable "workspace_storage_key_alias" {
-  description = "CMK for workspace storage alias."
-  type        = string
-}
+# variable "workspace_storage_key_alias" {
+#   description = "CMK for workspace storage alias."
+#   type        = string
+# }
+

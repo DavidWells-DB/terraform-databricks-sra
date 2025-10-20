@@ -19,13 +19,11 @@ resource "aws_s3_bucket_versioning" "root_bucket_versioning" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "root_storage_bucket" {
   bucket = aws_s3_bucket.root_storage_bucket.bucket
   rule {
-    bucket_key_enabled = true
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.workspace_storage.arn
+      sse_algorithm = "AES256"
     }
   }
-  depends_on = [aws_kms_alias.workspace_storage_key_alias]
+  #depends_on = [aws_kms_alias.workspace_storage_key_alias]
 }
 
 resource "aws_s3_bucket_public_access_block" "root_storage_bucket" {
