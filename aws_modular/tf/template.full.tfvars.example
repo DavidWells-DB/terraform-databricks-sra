@@ -1,0 +1,308 @@
+# =============================================================================
+# Configuration Variables for AWS and Databricks
+# =============================================================================
+
+# Quick usage (read me first)
+# 1) Follow the steps in the (Read Me)[../]
+# 2) Set these 5 first (required for any deployment):
+#    - aws_account_id
+#    - region
+#    - databricks_account_id
+#    - admin_user
+#    - resource_prefix
+# 2) Choose one mode:
+#    - Isolated (create everything): set network_configuration = "isolated" and optionally features_profile = "isolated"
+#    - BYO networking: set network_configuration = "custom" and fill network {} with ALL five values
+# 3) Run: terraform init -backend=false; terraform validate; terraform plan -var-file=<this-file>
+
+# Precedence rules (read before editing below)
+# - Grouped objects (network {}, kms {}, existing {}) take precedence over legacy scalar variables when both are provided.
+# - features_profile pre-sets sensible defaults; any explicit flags you set later in this file override the profile.
+# - Networking: network_configuration controls creation vs BYO. If set to "custom", ALL five values in network {} are required.
+# - Existing IDs (existing {}): when provided, they override creation for those specific resources (e.g., NCC, Network Policy, root bucket, cross-account role).
+# - KMS precedence: kms {} (ARN+alias) overrides CMK enable flags; enable flags control creation only when kms {} is not provided.
+
+# Minimal working example (isolated)
+# aws_account_id        = "123456789012"
+# region                = "us-west-2"
+# databricks_account_id = "12345678-90ab-cdef-1234-567890abcdef"
+# admin_user            = "workspace-admin@example.com"
+# resource_prefix       = "my-dbx"
+# network_configuration = "isolated"
+# features_profile      = "isolated"
+
+# Minimal working example (BYO networking)
+# aws_account_id        = "123456789012"
+# region                = "us-west-2"
+# databricks_account_id = "12345678-90ab-cdef-1234-567890abcdef"
+# admin_user            = "workspace-admin@example.com"
+# resource_prefix       = "my-dbx"
+# network_configuration = "custom"
+# features_profile      = "byo-min"
+# network = {
+#   vpc_id             = "vpc-0123456789abcdef0"
+#   private_subnet_ids = ["subnet-0aaa", "subnet-0bbb"]
+#   sg_id              = "sg-0123456789abcdef0"
+#   workspace_vpce_id  = "vpce-0aaaa"
+#   relay_vpce_id      = "vpce-0bbbb"
+# }
+
+# -----------------------------------------------------------------------------
+# AWS Variables
+# -----------------------------------------------------------------------------
+
+# AWS account ID where resources will be deployed
+aws_account_id = ""
+
+# AWS region for deployment
+region = ""
+
+# -----------------------------------------------------------------------------
+# Databricks Variables
+# -----------------------------------------------------------------------------
+
+# Long-term workspace/catalog admins (persist after deployment)
+# - admin_user: human who will remain a workspace/catalog ADMIN long-term
+# - admin_sp_client_id (optional): service principal to keep as a long-term ADMIN
+# Databricks account ID
+databricks_account_id = ""
+
+# Set a workspace and catalog admin
+admin_user = ""
+# admin_sp_client_id = "00000000-0000-0000-0000-000000000000"
+
+# Terraform Executor identity for first-run bootstrap (advanced; optional)
+# Purpose: allow the Terraform executor (user or SP) to perform workspace-scoped actions during apply.
+# This grant is temporary and can be removed after the first successful apply.
+#
+# Scenario A (executor == long-term admin): set admin_user to the executor's email, leave executor inputs unset.
+# Scenario B (executor != long-term admin): keep admin_user as the human; temporarily grant the executor ADMIN.
+#   - Set exactly ONE of:
+#       executor_user_email        # if the executor is a human user
+#       executor_sp_client_id     # if the executor is a service principal (client/application ID)
+#   - After success, set grant_terraform_sp_workspace_admin = false and apply again to remove executor ADMIN.
+# grant_terraform_sp_workspace_admin = true
+# executor_user_email            = "executor.user@company.com"
+# executor_sp_client_id         = "00000000-0000-0000-0000-000000000000"
+
+# -----------------------------------------------------------------------------
+# Resource Configuration
+# -----------------------------------------------------------------------------
+
+# Prefix used for naming and tagging resources (e.g., S3 buckets, IAM roles)
+resource_prefix = ""
+
+# Optional feature profile presets (isolated | byo-min | byo-full)
+# - Pre-sets sensible defaults (e.g., rotation, ownership controls, flow logs, cluster policies)
+# - Any explicit flags below will override the profile defaults
+# - Profiles do NOT change networking mode or endpoint policy hardening
+#   - isolated: opinionated secure defaults for greenfield (rotation on, ownership controls on, cluster policies on, etc.)
+#   - byo-min: minimal toggles for BYO deployments; most optional modules off
+#   - byo-full: secure defaults similar to isolated, but respects BYO inputs
+# features_profile = null
+
+# -----------------------------------------------------------------------------
+# Deployment mode and networking
+# -----------------------------------------------------------------------------
+
+# Network type: "custom" or "isolated" (required)
+# - isolated: template creates VPC, subnets, SG, endpoints (controlled by isolated CIDR inputs below)
+# - custom:   you must supply BYO networking under network {} (ALL five values required). The template will not create missing pieces in custom mode.
+network_configuration = "isolated"
+
+# ISOLATED NETWORK CONFIGURATION (only used when network_configuration = "isolated")
+vpc_cidr_range           = "10.0.0.0/18"
+private_subnets_cidr     = ["10.0.0.0/22", "10.0.4.0/22", "10.0.8.0/22"]
+privatelink_subnets_cidr = ["10.0.28.0/26", "10.0.28.64/26", "10.0.28.128/26"]
+sg_egress_ports          = [443, 2443, 5432, 6666, 8443, 8444, 8445, 8446, 8447, 8448, 8449, 8450, 8451]
+
+# Controlled egress (optional; isolated mode only)
+# - When enabled, creates IGW + NAT and adds optional SG allowlist rules
+# - You must provide public_subnets_cidr
+# - Keep disabled for fully isolated networks (PrivateLink + S3 GW only)
+# enable_controlled_egress = false
+# public_subnets_cidr      = ["10.0.20.0/24", "10.0.21.0/24", "10.0.22.0/24"]
+# allowed_outbound_cidrs   = ["0.0.0.0/0"]
+# allowed_outbound_tcp_ports = [443]
+# allowed_outbound_udp_ports = []
+
+# CUSTOM NETWORK CONFIGURATION (only used when network_configuration = "custom")
+# Provide BYO networking via grouped object (recommended) or legacy scalars (back-compat). Grouped takes precedence.
+
+# Grouped (recommended):
+# network = {
+#   vpc_id             = "vpc-0123456789abcdef0"
+#   private_subnet_ids = ["subnet-0aaa", "subnet-0bbb"]
+#   sg_id              = "sg-0123456789abcdef0"
+#   workspace_vpce_id  = "vpce-0aaaa"
+#   relay_vpce_id      = "vpce-0bbbb"
+# }
+
+# Legacy variables (included for backwards compatitibility):
+# custom_vpc_id             = "vpc-..."
+# custom_private_subnet_ids = ["subnet-...", "subnet-..."]
+# custom_sg_id              = "sg-..."
+# custom_relay_vpce_id      = "vpce-..."
+# custom_workspace_vpce_id  = "vpce-..."
+
+# Endpoint policy hardening (advanced; optional)
+# What it does:
+# - When enabled, adds aws:SourceVpce to S3 VPC endpoint policy for the workspace root bucket and UC catalog bucket.
+#   • Isolated mode: automatically pins to the created endpoints.
+#   • Custom mode: you must provide allowed_source_vpce_ids.
+# - Optionally constrains Databricks serverless egress via aws:VpceOrgPaths when allowed_serverless_org_paths is provided.
+# Precedence and scope:
+# - This feature is independent of profiles and networking mode selection.
+# - It does not toggle networking; networking mode is chosen exclusively by network_configuration ("isolated" | "custom").
+# - In isolated mode, if enabled, the module derives SourceVpce from created endpoints and ignores allowed_source_vpce_ids.
+# - In custom mode, if enabled, you must set allowed_source_vpce_ids; otherwise validation will fail.
+# Configuration:
+# enable_endpoint_policy_hardening = false
+# allowed_source_vpce_ids          = [
+#   # "vpce-0123", "vpce-0456"  # required in custom mode when hardening is enabled
+# ]
+# allowed_serverless_org_paths     = [
+#   # "arn:aws:ec2:region:acct:subnet/subnet-.../eni/eni-..."  # optional; adds serverless path constraint
+# ]
+
+# Account/Network attachments (optional)
+# You can reuse existing account-level objects instead of creating new ones:
+# Grouped (recommended):
+# existing = {
+#   ncc_id            = "ncc-1234"
+#   network_policy_id = "np-1234"
+# }
+# Legacy variables (included for backwards compatitibility):
+# use_existing_network_connectivity_configuration_id = "ncc-1234"
+# use_existing_network_policy_id                     = "np-1234"
+
+# -----------------------------------------------------------------------------
+# Optional modules (enable/disable features)
+# -----------------------------------------------------------------------------
+
+# Optional module toggles (set false to skip creating). All optional.
+# - enable_uc_catalog_creation: creates a workspace-isolated Unity Catalog bucket, storage credential, external location, and catalog
+# - enable_system_tables: enables System Tables (not supported in us-gov-west-1)
+# - enable_restrictive_root_bucket_policy: applies restrictive policy to the root bucket (read/write scoped to Databricks principals and workspace paths)
+# - disable_legacy_access_and_dbfs: disables legacy workspace access mode and legacy DBFS (including DBFS mounts)
+# - enable_classic_cluster: creates a small classic compute cluster for quick tests
+# - enable_user_workspace_assignment: grants ADMIN on the workspace to admin_user
+enable_uc_catalog_creation            = true
+enable_system_tables                  = true
+enable_restrictive_root_bucket_policy = true
+# Disable legacy workspace access mode and legacy DBFS (including DBFS mounts)
+disable_legacy_access_and_dbfs        = true
+enable_classic_cluster                = true
+enable_user_workspace_assignment      = true
+
+# -----------------------------------------------------------------------------
+# Workspace and account state (optional)
+# -----------------------------------------------------------------------------
+
+# If audit log delivery is already configured (skip creating)
+audit_log_delivery_exists = false
+
+# If a regional metastore exists (skip creating)
+metastore_exists = true
+
+# Optional: set a specific name for the Unity Catalog metastore when created
+# metastore_name = "my-org-unity-catalog"
+
+# -----------------------------------------------------------------------------
+# Workspace settings and storage
+# -----------------------------------------------------------------------------
+
+# Compliance Security Profile Setting
+# Standards: https://docs.databricks.com/aws/en/security/privacy/security-profile#compliance-security-profile-overview
+# NOTE: If you add HIPAA, it is your responsibility before you process PHI data to have a BAA agreement with Databricks.
+enable_compliance_security_profile = false
+
+# NOTE: This variable is necessary if and only if you do not set default compliance settings at the account level.
+# Avaiable compliance standards found here: https://pkg.go.dev/github.com/databricks/databricks-sdk-go/service/settings#ComplianceStandard
+compliance_standards = [ "Standard_A", "Standard_B" ]
+
+# Deployment name for the workspace (must be enabled by Databricks representative)
+deployment_name = null
+
+# If deploying to govcloud, is deployment "civilian" or "dod" shard (optional)
+databricks_gov_shard = null
+
+## Root bucket policy behavior (applies whether created or reused)
+# - true: attach Databricks bucket policy (requires permissions)
+# - false: skip policy management (security team manages externally)
+create_root_bucket_policy = true
+
+# Hardening toggles (all optional)
+# - enable_kms_rotation: sets rotation on created CMKs
+# - enable_s3_ownership_controls: enforces BucketOwnerEnforced (no ACLs) on created root bucket
+# - enable_s3_ephemeral_lifecycle: expires tmp/ephemeral prefixes; keep off unless you accept automatic deletion
+# - enable_vpc_flow_logs: enables VPC Flow Logs for created VPC (requires IAM + CloudWatch permissions)
+# - enable_cluster_policies: creates a baseline Databricks cluster policy (LTS, auto-termination, tags)
+enable_kms_rotation             = true
+enable_s3_ownership_controls    = true
+enable_s3_ephemeral_lifecycle   = false
+enable_vpc_flow_logs            = false
+enable_cluster_policies         = true
+
+# -----------------------------------------------------------------------------
+# KMS / CMK (Workspace Storage and Managed Services)
+# -----------------------------------------------------------------------------
+
+# Enable? (toggle independently). If disabled, SSE-S3 (AES256) is used where applicable.
+enable_cmk_workspace_storage = true
+enable_cmk_managed_services  = true
+
+# If YES, choose ONE of the options below:
+# Option A) Reuse existing keys (recommended). If ARN is set, alias is required.
+#   - Grouped (recommended): takes precedence over legacy variables
+# kms = {
+#   workspace_key_arn          = "arn:aws:kms:us-west-2:123456789012:key/abcd"
+#   workspace_key_alias        = "alias/workspace-storage"
+#   managed_services_key_arn   = "arn:aws:kms:us-west-2:123456789012:key/efgh"
+#   managed_services_key_alias = "alias/managed-services"
+# }
+#   - Legacy (back-compat):
+# use_existing_workspace_storage_kms_key_arn   = "arn:aws:kms:us-west-2:123456789012:key/abcd-..."
+# use_existing_workspace_storage_kms_key_alias = "alias/workspace-storage-key"
+# use_existing_managed_services_kms_key_arn    = "arn:aws:kms:us-west-2:123456789012:key/efgh-..."
+# use_existing_managed_services_kms_key_alias  = "alias/managed-services-key"
+
+# Option B) Create new keys. Provide an admin principal for the key policy and
+# optionally enable rotation with enable_kms_rotation (see Hardening toggles above).
+# cmk_admin_arn = "arn:aws:iam::123456789012:role/KMSAdmins"
+
+# If NO, leave kms {} and legacy key variables unset; keys will not be created/used.
+
+# -----------------------------------------------------------------------------
+# Optional: Integrated customizations
+# -----------------------------------------------------------------------------
+
+# Admin configuration (workspace settings hardening)
+enable_admin_configuration = false
+
+# IP Access Lists (restrict console access)
+enable_ip_access_list       = false
+ip_access_list_addresses    = [
+  # "1.2.3.4/32",
+  # "5.6.7.0/24"
+]
+
+# System Tables Audit Log Alerting (creates SQL alerts and a job)
+enable_audit_log_alerting   = false
+audit_log_alert_emails      = [
+  # admin_user
+]
+audit_log_alert_warehouse_id = "" # leave empty to create a warehouse
+
+# Security analysis tool (SAT)
+# - Requires egress to PyPI or allowlist in network policy
+# - Supports SP OAuth by default; set client ID/secret when enabled
+enable_security_analysis_tool = false
+# sat_use_sp_auth  = true
+# sat_client_id    = "00000000-0000-0000-0000-000000000000"
+# sat_client_secret = "..."
+
+# Read-only UC External Location for a specified bucket
+enable_read_only_external_location  = false
+read_only_data_bucket               = ""
+read_only_external_location_admin   = ""
